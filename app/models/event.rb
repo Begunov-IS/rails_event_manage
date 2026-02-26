@@ -1,13 +1,14 @@
 class Event < ApplicationRecord
   belongs_to :owner, class_name: 'User'
   belongs_to :category, optional: true
+  belongs_to :venue, optional: true
   has_many :tickets, dependent: :delete_all
+  has_many :event_sponsors, dependent: :delete_all
+  has_many :sponsors, through: :event_sponsors
+  has_many :attendances, dependent: :delete_all
+  has_many :attendees, through: :attendances, source: :user
 
-  validates :title, presence: true
-  validates :location, presence: true
-  validates :from_date, presence: true
-  validates :to_date, presence: true
-  validates :owner_id, presence: true
+  validates :title, :location, :from_date, :to_date, :owner_id, presence: true
   validate :end_date_after_start_date
 
   def end_date_after_start_date

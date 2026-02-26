@@ -72,7 +72,7 @@ Ticket.create(event: e3, price: 5000, status: 'available', user: nil)
 
 
 2 Выбрать всех юзеров у которых нет билета
-User.where.not(id: Ticket.select(:user_id).distinct)
+User.where.not(id: Ticket.all.pluck(:user_id))
 
 3 Выбрать все ивенты у которых не было билетов
 Event.where.not(id: Ticket.select(:event_id).distinct)
@@ -82,3 +82,70 @@ Category.joins(events: :tickets).group('categories.title').average('tickets.pric
 
 5 Выбрать все события, которые будут на текущей неделе
 Event.where(from_date: Time.current.beginning_of_week..Time.current.end_of_week)
+
+6 Вывести список событий и название их категории без N+1
+Event.includes(:category).each { |e| puts "#{e.title} — #{e.category&.title || 'Без категории'}" }
+
+7 Получить события и список email пользователей, купивших билеты
+Event.includes(tickets: :user).each do |event|
+  emails = event.tickets.select { |t| t.status == 'booked' && t.user }.map { |t| t.user.email }
+  puts "#{event.title}: #{emails.join(', ')}"
+end
+
+8 Найти события в категории "Music" и сразу загрузить категорию
+Event.includes(:category).where(categories: { title: 'Music' })
+
+9 Найти пользователей, которые покупали билеты на события в категории "Music", и сразу загрузить эти события
+User.joins(tickets: { event: :category }).where(categories: { title: 'Music' }, tickets: { status: 'booked' }).includes(tickets: :event).distinct
+
+
+10 Площадки, на которых не проводились события
+Venue.left_joins(:events).where(events: { id: nil })
+
+11 Все площадки с их событиями без N+1
+Venue.includes(:events).each do |v|
+  puts "#{v.name} (#{v.city}): #{v.events.map(&:title).join(', ')}"
+end
+
+12 События сгруппированные по городу площадки
+Event.joins(:venue).group('venues.city').count
+
+13 События на площадках в конкретном городе с загруженной площадкой
+Event.includes(:venue).where(venues: { city: 'Москва' })
+
+
+14 Общее финансирование каждого события
+Event.joins(:event_sponsors).group('events.id', 'events.title').select('events.id, events.title, SUM(event_sponsors.amount) AS total_funding').each { |e| puts "#{e.title}: #{e.total_funding}" }
+
+15 Все события со спонсорами без N+1
+Event.includes(:sponsors).each do |event|
+  puts "#{event.title}: #{event.sponsors.map(&:name).join(', ').presence || 'нет спонсоров'}"
+end
+
+16 События без спонсоров
+Event.left_joins(:event_sponsors).where(event_sponsors: { id: nil })
+
+17 Спонсоры с количеством событий и суммой вложений
+Sponsor.joins(:event_sponsors).group('sponsors.id', 'sponsors.name').select('sponsors.id, sponsors.name, COUNT(event_sponsors.id) AS events_count, SUM(event_sponsors.amount) AS total_invested').each { |s| puts "#{s.name}: #{s.events_count} событий, #{s.total_invested} всего" }
+
+
+18 События без посетителей
+Event.left_joins(:attendances).where(attendances: { id: nil })
+
+19 События, которые были посещены
+Event.joins(:attendances).distinct
+
+20 События с количеством посетителей
+Event.left_joins(:attendances).group('events.id', 'events.title').select('events.id, events.title, COUNT(attendances.id) AS attendee_count').order('attendee_count DESC').each { |e| puts "#{e.title}: #{e.attendee_count} посетителей" }
+
+21 Пользователи с посещёнными событиями без N+1
+User.includes(:attended_events).each do |user|
+  next if user.attended_events.empty?
+  puts "#{user.name}: #{user.attended_events.map(&:title).join(', ')}"
+end
+
+22 События с посетителями без N+1
+Event.includes(:attendees).each do |event|
+  names = event.attendees.map(&:name).join(', ')
+  puts "#{event.title}: #{names.presence || 'никто не пришёл'}"
+end
